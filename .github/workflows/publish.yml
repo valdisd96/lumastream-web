@@ -1,0 +1,36 @@
+name: Verify and publish
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: python3 -m unittest discover -s tests -v
+  publish:
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build immutable revision
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/valdisd96/lumastream-web:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/valdisd96/lumastream-web
+            org.opencontainers.image.revision=${{ github.sha }}

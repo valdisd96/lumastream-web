@@ -1,0 +1,75 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: lumastream-web
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [lumastream-web]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lumastream-web
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: lumastream-web
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  jobName: lumastream-web-public
+  interval: 30s
+  module: https_2xx
+  prober:
+    url: monitoring-blackbox.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://uvauchok-lab.duckdns.org/lumastream/healthz
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: lumastream-web
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: lumastream.web
+      rules:
+        - alert: LumaStreamWebsiteUnavailable
+          expr: probe_success{job="lumastream-web-public"} == 0 or up{job="lumastream-web-public"} == 0 or absent(probe_success{job="lumastream-web-public"})
+          for: 2m
+          labels: {severity: warning, namespace: lumastream-web}
+          annotations:
+            summary: LumaStream public HTTPS health check is unavailable
+            description: Check the website Deployment, PVC and Gateway route. This probe runs inside the cluster, not from an independent external network.
+        - alert: LumaStreamMetricsUnavailable
+          expr: up{namespace="lumastream-web"} == 0 or absent(up{namespace="lumastream-web"})
+          for: 5m
+          labels: {severity: warning, namespace: lumastream-web}
+          annotations:
+            summary: LumaStream metrics are not being collected
+            description: Check the ServiceMonitor, metrics listener and Cilium policy.
+        - alert: LumaStreamGitHubStatsStale
+          expr: time() - lumastream_github_last_success_timestamp_seconds > 3600
+          for: 15m
+          labels: {severity: warning, namespace: lumastream-web}
+          annotations:
+            summary: LumaStream GitHub download statistics are stale
+            description: Check GitHub availability, API limits and the website egress policy. Downloads redirect directly and do not depend on this refresh.
+        - alert: LumaStreamWebsiteErrors
+          expr: sum(rate(lumastream_http_requests_total{status="5xx"}[5m])) / clamp_min(sum(rate(lumastream_http_requests_total[5m])), 0.001) > 0.05
+          for: 5m
+          labels: {severity: warning, namespace: lumastream-web}
+          annotations:
+            summary: LumaStream website server errors exceed five percent
+            description: Inspect application health and storage availability; do not discard the analytics PVC.
