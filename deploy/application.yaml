@@ -62,7 +62,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: web
-          image: ghcr.io/valdisd96/lumastream-web:initial
+          image: ghcr.io/valdisd96/lumastream-web@sha256:abf6ed3c31bd0bf554d517cd8aa41a0398d8ddcd78b74bcfd259950876927691
           ports:
             - {name: http, containerPort: 8080}
             - {name: metrics, containerPort: 9090}
