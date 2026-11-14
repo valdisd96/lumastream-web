@@ -19,9 +19,51 @@ python3 -m unittest discover -s tests -v
 
 `public/` contains ordinary HTML/CSS and reviewed screenshots. `server.py` serves the site on 8080 and Prometheus metrics on a **separate** 9090 listener. Do not publish 9090 to the internet. There is no tracking script, third-party font request or frontend build chain.
 
+### Agent delivery workflow
+
+[AGENTS.md](AGENTS.md) is the agent entry point. Use short-lived `feat/`, `fix/`,
+`docs/` or `chore/` branches from current `main`, with PRs and squash merges; there
+is no `develop` branch.
+
+**Task branch → local checks → PR → successful current CI → merge → deployment.**
+
+1. Inspect current GitHub/worktree state; preserve unrelated changes. Implement on
+   a task branch, update relevant documentation, and run the checks that exercise
+   the change. Server changes use the unittest command above; UI changes require
+   real desktop/mobile EN/RU browser checks. Prose-only changes need link/procedure
+   checks, not a cluster rollout.
+2. Review the full staged diff for scope and secrets, then commit/push the task
+   branch and open a PR using the repository template. Report actual results and
+   known limits. Never push directly to `main` or bypass failed checks.
+3. Wait for successful `verify` CI for the current PR head/base. Missing, skipped,
+   cancelled or obsolete checks do not pass the gate. Confirm no draft/conflicts;
+   changed head/base requires renewed CI. The PR `publish` job is intentionally
+   skipped: image publication occurs only on `main`.
+4. Obtain owner approval for merging code, commands, CI or workflow/security policy.
+   An explicit full-delivery request can authorize this within its scope; a request
+   only to commit cannot. Cosmetic prose may merge autonomously after CI, but policy
+   changes are not cosmetic. Use `gh pr merge --squash --match-head-commit` with the
+   verified head SHA, never `--admin`. Confirm MERGED and the resulting `main` CI.
+5. Deploy only within an approved operational scope, from a clean checkout of the
+   exact merged deployment revision, after the relevant `main` checks/publication
+   succeed. Record source/build SHA, deployment SHA, digest, CI run, runtime checks
+   and rollback. Commit verification evidence through a subsequent PR rather than
+   directly to `main`. For prose-only changes, report deployment as **not needed**.
+
+These are agent rules, not a claim that GitHub branch protection enforces them.
+At adoption, `main` was unprotected; this documentation change does not configure
+repository protection or automatic deployment. Recheck current settings before
+relying on a technical gate. On an unprotected branch, a head-SHA guard alone does
+not atomically guard concurrent base/CI changes.
+
+Commit/push, merge, image publication and cluster rollout are distinct operations.
+GitHub Actions currently verifies every PR and verifies/publishes each `main`
+push, including documentation-only pushes; it does **not** deploy Kubernetes.
+Report each operation's actual status, including any pending owner approval.
+
 ## Release source
 
-The site deliberately points at the exact published **v0.9.1 preview**, not GitHub `/releases/latest` (which excludes previews). APKs remain hosted by GitHub; the website never rebuilds or re-signs them. For a new release, update the exact tag and asset allowlist in `server.py`, both translations, and deployment image in one reviewed change. Keep SHA256SUMS and release links paired with the APK.
+The site deliberately points at the exact published **v0.9.1 preview**, not GitHub `/releases/latest` (which excludes previews). APKs remain hosted by GitHub; the website never rebuilds or re-signs them. For a new release, update the exact tag and asset allowlist in `server.py` and both translations in one source PR, then promote the published website image through the separate deployment PR described below. Keep SHA256SUMS and release links paired with the APK.
 
 ## Metrics and privacy
 
@@ -44,7 +86,24 @@ The one-writer SQLite deployment uses `Recreate`: updates briefly interrupt serv
 
 ### Publish and deploy
 
-GitHub Actions verifies tests and publishes `ghcr.io/valdisd96/lumastream-web:<commit>` on `main`. All third-party actions and the Python base image are digest/SHA-pinned. Public image pull access must be verified before rollout. Replace the deployment image with the **published digest**, never `latest`.
+GitHub Actions verifies tests and publishes `ghcr.io/valdisd96/lumastream-web:<commit>` on `main`. All third-party actions and the Python base image are digest/SHA-pinned. Public image pull access must be verified before rollout. Deployment uses the **published digest**, never `latest`, and requires the workflow and operational approval above.
+
+Because publication occurs after merge, an application release uses two PRs:
+
+1. Merge the source/content change after its checks and approval, then wait for
+   successful `verify` and `publish` jobs on that exact `main` source revision.
+2. Resolve its published image digest. In a new promotion task branch, pin that
+   digest in `deploy/application.yaml` and record its source SHA/publication run in
+   the PR. Run relevant manifest checks, obtain approval, and merge after current
+   PR CI succeeds.
+3. Wait for the promotion revision's `main` workflow, then apply the committed
+   manifests from a clean checkout of that merged revision. The promotion push
+   also publishes an image, but the intended application image remains the
+   source revision's explicitly selected digest; do not chase the new tag.
+
+Manifest/dashboard-only changes use the same PR/CI/merge gate and may retain the
+existing verified image digest. Never deploy a local pin before its promotion PR
+is merged. Neither a successful build nor a merge alone proves runtime health.
 
 Use the existing kubeconfig without printing it:
 

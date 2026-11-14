@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add an agent entry point and PR checklist requiring task branches, relevant local checks, current PR CI, approved squash merge and separately authorized deployment from merged configuration.
+- Document immutable image promotion after successful `main` publication, documentation-only deployment exemptions and explicit reporting of commit, merge and rollout status. This policy change does not enable branch protection or automatic cluster deployment.
+
 ## Initial website
 
 - Add an English/Russian cinematic landing page, exact signed-preview downloads, installation guides, FAQ and privacy/attribution information.
